@@ -1,637 +1,502 @@
 # IoT-Based Early Flood Detection and Avoidance System with Predictive AI
 
-## Overview
+![Status](https://img.shields.io/badge/status-laboratory%20prototype-orange)
+![Platform](https://img.shields.io/badge/platform-ESP32-blue)
+![Protocol](https://img.shields.io/badge/protocol-MQTT-purple)
+![Forecasting](https://img.shields.io/badge/forecasting-Chronos--2-green)
+![Python](https://img.shields.io/badge/python-3.x-yellow)
 
-The **IoT-Based Early Flood Detection and Avoidance System with Predictive AI** is a laboratory-scale IoT and AI prototype designed to monitor water-level changes continuously, estimate the rate at which the water level is changing, communicate sensor observations through MQTT, forecast short-term water-level behaviour, classify future risk, and provide local warning and actuator control.
+A laboratory-scale IoT and AI prototype that continuously monitors water level, estimates the rate of rise, publishes sensor observations over MQTT, forecasts short-term water-level behaviour, classifies future flood risk, and provides local warning and actuator control.
 
-The system combines an **ESP32-based sensing node**, environmental sensors, an MQTT communication layer, a Python-based AI service, and a web dashboard.
+> **Scope notice:** This project is intended for laboratory demonstration and academic evaluation. It is **not** a field-certified flood-warning system.
 
-The implementation deliberately separates physical measurement from predictive intelligence:
+---
 
-```text
-Physical Environment
-        │
-        ▼
-┌──────────────────────┐
-│ ESP32 Sensing Node   │
-│                      │
-│ Water Level          │
-│ Rain Sensor          │
-│ DHT11                │
-│ Rate of Rise         │
-│ Local Safety Logic   │
-│ Buzzer / Relay       │
-└──────────┬───────────┘
-           │ Wi-Fi
-           ▼
-┌──────────────────────┐
-│ Mosquitto MQTT       │
-│ Broker               │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────────────┐
-│ Python AI / Backend Service  │
-│                              │
-│ Chronos-2 Forecasting        │
-│ Random Forest Risk Model     │
-│ Session / Data Processing    │
-└────────────┬─────────────────┘
-             │
-             ├──────────────► Web Dashboard
-             │
-             └──────────────► MQTT Prediction
-                                    │
-                                    ▼
-                              ESP32 Response
-The current prototype is intended for laboratory demonstration and academic evaluation. It is not a field-certified flood-warning system.
+## Table of Contents
 
-1. Project Objectives
-The main objectives are:
+1. [Overview](#1-overview)
+2. [Project Objectives](#2-project-objectives)
+3. [System Architecture](#3-system-architecture)
+4. [Hardware](#4-hardware)
+5. [Water-Level Calibration](#5-water-level-calibration)
+6. [Signal Processing](#6-signal-processing)
+7. [Rate-of-Rise Estimation](#7-rate-of-rise-estimation)
+8. [Rain Sensor](#8-rain-sensor)
+9. [AI and Prediction Pipeline](#9-ai-and-prediction-pipeline)
+10. [Datasets](#10-datasets)
+11. [Dashboard](#11-dashboard)
+12. [Project Structure](#12-project-structure)
+13. [Software Requirements](#13-software-requirements)
+14. [Installation and Configuration](#14-installation-and-configuration)
+15. [Running the System](#15-running-the-system)
+16. [Collecting New Sensor Data](#16-collecting-new-sensor-data)
+17. [Data Integrity Rules](#17-data-integrity-rules)
+18. [Local Safety Behaviour](#18-local-safety-behaviour)
+19. [Limitations](#19-limitations)
+20. [Future Scope](#20-future-scope)
+21. [Reproducibility](#21-reproducibility)
+22. [Academic and Experimental Scope](#22-academic-and-experimental-scope)
+23. [Safety Notice](#23-safety-notice)
+24. [Authors](#24-authors)
+25. [Project Status](#25-project-status)
 
-Continuously measure water level using an ESP32.
-Estimate the rate of water-level rise from sequential measurements.
-Monitor rain/wetness conditions.
-Measure temperature and humidity.
-Transmit sensor observations using MQTT.
-Maintain a real sensor history without synthetic startup data.
-Forecast short-term water-level behaviour using Chronos-2.
-Classify future flood risk using a Random Forest model.
-Display live measurements and predictions through a web dashboard.
-Provide local buzzer and relay control.
-Maintain deterministic local safety behaviour even when the AI service is unavailable.
-Establish a foundation for future deployment at larger water bodies such as reservoirs and dams.
-2. System Architecture
-The project consists of five major layers.
+---
 
-2.1 Sensing Layer
-The ESP32 collects:
+## 1. Overview
 
-Water-level sensor ADC
-Rain sensor ADC
-Temperature
-Humidity
-The water-level sensor is calibrated using experimentally measured ADC-to-level points.
+The system combines an **ESP32-based sensing node**, environmental sensors, an **MQTT** communication layer, a **Python-based AI service**, and a **web dashboard**.
 
-2.2 Embedded Processing Layer
-The ESP32 performs:
+The implementation deliberately separates physical measurement from predictive intelligence. The ESP32 performs all measurement and retains deterministic local safety logic, while the AI service provides forecasting and risk classification as an additional layer.
 
-ADC acquisition
-Median filtering
-Empirical water-level calibration
-Exponential smoothing
-Sensor-validity checks
-Rate-of-rise estimation
-Rain-state classification
-Local warning logic
-Relay control
-MQTT communication
-The final rate estimator uses a short-window Theil-Sen robust slope rather than relying on a simple two-point difference.
+## 2. Project Objectives
 
-2.3 Communication Layer
-The prototype uses:
+- Continuously measure water level using an ESP32.
+- Estimate the rate of water-level rise from sequential measurements.
+- Monitor rain/wetness conditions.
+- Measure temperature and humidity.
+- Transmit sensor observations using MQTT.
+- Maintain a real sensor history without synthetic startup data.
+- Forecast short-term water-level behaviour using Chronos-2.
+- Classify future flood risk using a Random Forest model.
+- Display live measurements and predictions through a web dashboard.
+- Provide local buzzer and relay control.
+- Maintain deterministic local safety behaviour even when the AI service is unavailable.
+- Establish a foundation for future deployment at larger water bodies such as reservoirs and dams.
 
-ESP32 → Wi-Fi → Mosquitto MQTT Broker
+## 3. System Architecture
 
-The main MQTT topics are:
+```mermaid
+flowchart TD
+    A[Physical Environment] --> B["ESP32 Sensing Node<br/>Water Level · Rain · DHT11<br/>Rate of Rise · Local Safety Logic<br/>Buzzer / Relay"]
+    B -- "Wi-Fi / MQTT publish" --> C[Mosquitto MQTT Broker]
+    C --> D["Python AI / Backend Service<br/>Chronos-2 Forecasting<br/>Random Forest Risk Model<br/>Session / Data Processing"]
+    D --> E[Web Dashboard]
+    D -- "flood/zone1/prediction" --> C
+    C -- "Prediction" --> F[ESP32 Response]
+    E -- "flood/zone1/command" --> C
+```
 
-flood/zone1/sensors
-flood/zone1/prediction
-flood/zone1/command
-Sensor topic
-flood/zone1/sensors
-Carries measurements generated by the ESP32.
+### 3.1 Layers
 
-Prediction topic
-flood/zone1/prediction
-Carries the forecasting and risk results generated by the Python backend.
+| Layer | Responsibilities |
+|---|---|
+| **Sensing** | Water-level ADC, rain-sensor ADC, temperature, humidity |
+| **Embedded processing** | ADC acquisition, median filtering, empirical calibration, exponential smoothing, sensor-validity checks, rate-of-rise estimation, rain-state classification, local warning logic, relay control, MQTT communication |
+| **Communication** | ESP32 → Wi-Fi → Mosquitto MQTT broker |
+| **AI / backend** | Session validation, Chronos-2 forecasting, Random Forest risk classification, HTTP service for the dashboard |
+| **Presentation** | Web dashboard served by the Python backend |
 
-Command topic
-flood/zone1/command
-Carries dashboard actuator commands.
+### 3.2 MQTT Topics
 
-3. Hardware
-3.1 Hardware Components
-Component	Purpose
-ESP32 Dev Module	Main embedded controller
-Resistive water-level probe	Water-level measurement
-Rain sensor	Rain/wetness indication
-DHT11	Temperature and humidity
-Buzzer	Local audible warning
-1-channel 5 V relay	Pump/control interface
-External 5 V supply	External actuator power
-The HC-SR04 ultrasonic sensor and indicator LEDs were removed from the final implementation.
+| Topic | Direction | Description |
+|---|---|---|
+| `flood/zone1/sensors` | ESP32 → Broker | Measurements generated by the ESP32 |
+| `flood/zone1/prediction` | Backend → Broker | Forecast and risk results generated by the Python backend |
+| `flood/zone1/command` | Dashboard → Broker | Dashboard actuator commands |
 
-3.2 Final Pin Configuration
-Component	ESP32 Pin
-Water-level sensor AO	GPIO34
-Rain sensor AO	GPIO35
-DHT11 DATA	GPIO4
-Buzzer	GPIO25
-Relay IN	GPIO23
-The sensor and actuator power arrangements must follow the wiring configuration documented for the final hardware build.
+## 4. Hardware
 
-4. Water-Level Calibration
-The water-level probe is used over a demonstration range of approximately 0–4 cm.
+### 4.1 Components
 
-The final empirical calibration points are:
+| Component | Purpose |
+|---|---|
+| ESP32 Dev Module | Main embedded controller |
+| Resistive water-level probe | Water-level measurement |
+| Rain sensor | Rain/wetness indication |
+| DHT11 | Temperature and humidity |
+| Buzzer | Local audible warning |
+| 1-channel 5 V relay | Pump/control interface |
+| External 5 V supply | External actuator power |
 
-ADC	Level
-0	0.0 cm
-520	0.5 cm
-1050	1.0 cm
-1665	2.0 cm
-1755	2.5 cm
-1870	3.0 cm
-1960	3.5 cm
-2060	4.0 cm
-The implementation performs piecewise-linear interpolation between calibration points.
+> The HC-SR04 ultrasonic sensor and indicator LEDs were removed from the final implementation.
 
-The sensor should therefore be treated as a laboratory-scale demonstration sensor, not as a calibrated field flood-depth instrument.
+### 4.2 Final Pin Configuration
 
-5. Signal Processing
-The ESP32 collects multiple ADC readings for each water-level observation.
+| Component | ESP32 Pin |
+|---|---|
+| Water-level sensor AO | GPIO34 |
+| Rain sensor AO | GPIO35 |
+| DHT11 DATA | GPIO4 |
+| Buzzer | GPIO25 |
+| Relay IN | GPIO23 |
 
-The implementation uses:
+Sensor and actuator power arrangements must follow the wiring configuration documented for the final hardware build.
 
-ADC burst acquisition
-Median filtering
-Piecewise-linear calibration
-Exponential smoothing
-Sensor validity checking
-Rate-of-rise estimation
+## 5. Water-Level Calibration
+
+The water-level probe is used over a demonstration range of approximately **0–4 cm**. The implementation performs piecewise-linear interpolation between the following empirical calibration points:
+
+| ADC | Level (cm) |
+|---:|---:|
+| 0 | 0.0 |
+| 520 | 0.5 |
+| 1050 | 1.0 |
+| 1665 | 2.0 |
+| 1755 | 2.5 |
+| 1870 | 3.0 |
+| 1960 | 3.5 |
+| 2060 | 4.0 |
+
+The sensor should be treated as a laboratory-scale demonstration sensor, not as a calibrated field flood-depth instrument.
+
+## 6. Signal Processing
+
+For each water-level observation the ESP32 applies the following chain:
+
+1. ADC burst acquisition
+2. Median filtering
+3. Piecewise-linear calibration
+4. Exponential smoothing
+5. Sensor-validity checking
+6. Rate-of-rise estimation
+
 The smoothing equation is:
 
-S(t) = αX(t) + (1 − α)S(t − 1)
-where:
+```text
+S(t) = α·X(t) + (1 − α)·S(t − 1)
+```
 
-X(t) is the current calibrated measurement.
-S(t) is the filtered measurement.
-α = 0.75 in the final implementation.
-6. Rate-of-Rise Estimation
-The system calculates the rate of water-level change using a Theil-Sen estimator over a short recent history.
+where `X(t)` is the current calibrated measurement, `S(t)` is the filtered measurement, and `α = 0.75` in the final implementation.
 
-Conceptually:
+## 7. Rate-of-Rise Estimation
 
-rate = median(
-    (level[j] - level[i]) /
-    (time[j] - time[i])
-)
+The rate of water-level change is computed using a **Theil–Sen estimator** over a short recent history:
+
+```text
+rate = median( (level[j] − level[i]) / (time[j] − time[i]) )   for all i < j
+```
+
 This approach was selected after testing showed that a longer ordinary least-squares window could leave a false rate tail after the physical water level had already stabilized.
 
-7. Rain Sensor
-The rain sensor is treated as a qualitative wetness/rain-state sensor.
+## 8. Rain Sensor
 
-The implemented states are:
+The rain sensor is treated as a **qualitative** wetness/rain-state sensor.
 
-Dry
-Light
-Heavy
-The current thresholds are:
+| Condition | State |
+|---|---|
+| `ADC >= 3000` | Dry |
+| `ADC < 1500` | Heavy |
+| otherwise | Light |
 
-ADC >= 3000       → Dry
-ADC < 1500        → Heavy
-otherwise         → Light
-These categories should not be interpreted as calibrated rainfall intensity in millimetres per hour.
+These categories must not be interpreted as calibrated rainfall intensity in millimetres per hour.
 
-8. AI and Prediction Pipeline
+## 9. AI and Prediction Pipeline
+
 The AI service runs on the laptop.
 
-The prediction pipeline is:
+```mermaid
+flowchart TD
+    A[Real Sensor History] --> B[Session Validation]
+    B --> C[Recent Water-Level Series]
+    C --> D[Chronos-2]
+    D --> E[Future Level]
+    C --> F[Feature Vector]
+    F --> G[Random Forest]
+    G --> H[Future Risk]
+```
 
-Real Sensor History
-        │
-        ▼
-Session Validation
-        │
-        ▼
-Recent Water-Level Series
-        │
-        ├───────────────► Chronos-2
-        │                    │
-        │                    ▼
-        │              Future Level
-        │
-        └───────────────► Feature Vector
-                           │
-                           ▼
-                     Random Forest
-                           │
-                           ▼
-                       Future Risk
-8.1 Chronos-2
-The project uses the pretrained:
+### 9.1 Chronos-2 Forecasting
 
-amazon/chronos-2
-model.
+The project uses the pretrained `amazon/chronos-2` model for short-term water-level forecasting, rather than training a new forecasting model on the small local dataset.
 
-Chronos-2 is used for short-term water-level forecasting rather than training a new forecasting model from the small local dataset.
+| Parameter | Value |
+|---|---|
+| Sensor interval | ≈ 5 s |
+| History window | up to ≈ 10 min |
+| Forecast horizon | 5 min |
+| Future steps | 60 |
 
-The current configuration uses:
+The first forecast is generated only after sufficient fresh sensor history has been collected. **No synthetic sensor history is used as a fallback.**
 
-approximately 5-second sensor intervals;
-up to approximately 10 minutes of recent history;
-a 5-minute forecast horizon;
-60 future steps.
-The first forecast is generated only after sufficient fresh sensor history has been collected.
+### 9.2 Random Forest Risk Classification
 
-No synthetic sensor history is used as a fallback.
+A separate Random Forest model classifies future risk. The live feature vector is:
 
-9. Random Forest Risk Classification
-A separate Random Forest model is used for future-risk classification.
+```text
+level_cm, rate_cm_min, rain_adc, temp_c, hum
+```
 
-The live feature vector contains:
-
-level_cm
-rate_cm_min
-rain_adc
-temp_c
-hum
 The future label is determined from the maximum observed water level during the following five-minute window.
 
-The prototype risk bands are:
+| Future Level | Prototype Risk |
+|---|---|
+| < 2.0 cm | LOW |
+| 2.0 – < 3.0 cm | MODERATE |
+| 3.0 – < 3.5 cm | HIGH |
+| 3.5 – 4.0 cm | CRITICAL |
 
-Future Level	Prototype Risk
-< 2.0 cm	LOW
-2.0–<3.0 cm	MODERATE
-3.0–<3.5 cm	HIGH
-3.5–4.0 cm	CRITICAL
-These are project-specific experimental labels and are not official flood-risk standards.
+These are project-specific experimental labels and are **not** official flood-risk standards.
 
-10. Dataset
-The final real-sensor dataset contains:
+## 10. Datasets
 
-398 accepted sensor observations
-3 separated collection sessions
-0 missing values
-0 duplicate timestamps
-approximately 5.017 s median sampling interval
-water level range: 0–4 cm
-Environmental measurements were collected together with the water-level measurements.
+### 10.1 Real-Sensor Dataset
 
-The rain-state distribution contains:
+| Property | Value |
+|---|---|
+| Accepted sensor observations | 398 |
+| Separated collection sessions | 3 |
+| Missing values | 0 |
+| Duplicate timestamps | 0 |
+| Median sampling interval | ≈ 5.017 s |
+| Water-level range | 0–4 cm |
 
-Dry
-Light
-Heavy
-The dataset is intended for prototype evaluation and is not representative of natural flood events at reservoir, river, or urban scales.
+Environmental measurements were collected together with water-level measurements. The rain-state distribution covers Dry, Light, and Heavy conditions. The dataset is intended for prototype evaluation and is not representative of natural flood events at reservoir, river, or urban scales.
 
-11. Risk Dataset
-Future-window processing produced:
+### 10.2 Risk Dataset
 
-293 usable future-labelled samples
+Future-window processing produced **293** usable future-labelled samples:
 
-Observed distribution:
+| Class | Samples |
+|---|---:|
+| LOW | 0 |
+| MODERATE | 5 |
+| HIGH | 46 |
+| CRITICAL | 242 |
 
-MODERATE   5
-HIGH       46
-CRITICAL   242
-LOW        0
-The dataset is therefore highly imbalanced.
+The dataset is highly imbalanced. A held-out balanced accuracy of **0.917** was obtained for the available classification experiment; this result should be interpreted cautiously because the dataset does not contain all risk classes.
 
-A reported held-out balanced accuracy of:
+## 11. Dashboard
 
-0.917
-was obtained for the available classification experiment.
+The dashboard communicates with the Python backend through a local HTTP service and displays:
 
-This result should be interpreted cautiously because the available dataset does not contain all risk classes.
+- Current water level
+- Rate of rise
+- Rain state
+- Predicted water level and forecast horizon
+- Future-risk category
+- Alert state
+- Temperature and humidity
+- Pump state
+- Station status
+- Recent trend
 
-12. Dashboard
-The web dashboard provides live visibility into:
+Typical address: `http://localhost:8000`
 
-Current water level
-Rate of rise
-Rain state
-Predicted water level
-Forecast horizon
-Future-risk category
-Alert state
-Temperature
-Humidity
-Pump state
-Station status
-Recent trend
-The dashboard communicates with the Python backend through the local HTTP service.
+## 12. Project Structure
 
-Typical startup address:
-
-http://localhost:8000
-13. Project Directory
-A typical project directory is organized as follows:
-
-IoT flood Detection/
-│
+```text
+IoT-Flood-Detection/
 ├── src/
-│   └── main.cpp
-│
+│   └── main.cpp            # ESP32 firmware
 ├── include/
 ├── lib/
 ├── test/
-│
 ├── platformio.ini
-│
-├── flood_ai.py
-├── collect_real_data.py
-├── dashboard.html
-├── flood_data.csv
-│
-├── .pio/
-├── .vscode/
-│
+├── flood_ai.py             # AI / backend service
+├── collect_real_data.py    # Real-sensor data collector
+├── dashboard.html          # Web dashboard
+├── flood_data.csv          # Curated real-sensor dataset
 └── README.md
+```
+
 The exact contents may change during development.
 
-14. Software Requirements
-Recommended software:
+## 13. Software Requirements
 
-PlatformIO
-Visual Studio Code
-Arduino/ESP32 PlatformIO environment
-Mosquitto MQTT broker
-Python 3.x
-Python virtual environment
-MQTT Python client
-NumPy
-pandas
-scikit-learn
-Chronos forecasting package
-Joblib where required by the trained model
-15. Python Environment
-The project uses a Python virtual environment.
+- PlatformIO and Visual Studio Code
+- Arduino/ESP32 PlatformIO environment
+- Mosquitto MQTT broker
+- Python 3.x with a virtual environment
+- Python packages: MQTT client (e.g. `paho-mqtt`), NumPy, pandas, scikit-learn, Chronos forecasting package, Joblib
 
-Example:
+## 14. Installation and Configuration
 
-& "C:\Users\name\Downloads\Project OMA Agency\IoT flood Based Detection\.venv\Scripts\python.exe"
+### 14.1 Python Environment
 
-Before running the AI service, verify that the required Python packages are installed in this environment.
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install paho-mqtt numpy pandas scikit-learn joblib chronos-forecasting
+```
 
-16. MQTT Broker Setup
-The project uses Mosquitto locally.
+Verify that all required packages are installed in this environment before running the AI service.
 
-The broker listens on:
+### 14.2 MQTT Broker
 
-TCP 1883
-The ESP32 must use the laptop's current LAN IP address as the MQTT broker address.
+Mosquitto runs locally and listens on **TCP 1883**. The ESP32 must use the laptop's current LAN IP address as the broker address:
 
-For example:
+```cpp
+const char* MQTT_HOST = "<LAPTOP_LAN_IP>";
+const int   MQTT_PORT = 1883;
+```
 
-MQTT_HOST = "<LAPTOP_LAN_IP>"
-MQTT_PORT = 1883
-Do not permanently copy an old laptop IP into the firmware because the laptop address can change when DHCP is used.
+Do not permanently hard-code an old laptop IP into the firmware, as the address can change under DHCP.
 
-For the laboratory prototype, anonymous MQTT access may be used. A production deployment should use authentication, authorization, encrypted transport, and appropriate network controls.
+For the laboratory prototype, anonymous MQTT access may be used. A production deployment requires authentication, authorization, encrypted transport, and appropriate network controls.
 
-17. Running the System
-Step 1 — Connect Hardware
-Connect the ESP32 and the final sensors according to the documented pin configuration.
+## 15. Running the System
 
-Power the board.
+1. **Connect hardware.** Wire the ESP32 and sensors according to [Section 4.2](#42-final-pin-configuration) and power the board.
+2. **Upload firmware.** In PlatformIO, run *Build* then *Upload*. Open the serial monitor at `115200` baud and confirm that Wi-Fi and MQTT connect successfully.
+3. **Start Mosquitto.** Ensure the broker is running and listening on port `1883`.
+4. **Start the AI backend.**
 
-Step 2 — Upload Firmware
-Open the project in PlatformIO.
+   ```powershell
+   cd "<path-to>/IoT-Flood-Detection"
+   .\.venv\Scripts\python.exe flood_ai.py serve
+   ```
 
-Build and upload:
+5. **Open the dashboard** at `http://localhost:8000`.
+6. **Allow sensor history to accumulate.** Chronos-2 does not produce a forecast immediately at startup. Allow the system to run for several minutes before evaluating the forecast and risk display.
 
-PlatformIO → Build
-PlatformIO → Upload
-Open the serial monitor at:
+## 16. Collecting New Sensor Data
 
-115200 baud
-Check that Wi-Fi and MQTT connect successfully.
+```powershell
+cd "<path-to>/IoT-Flood-Detection"
+.\.venv\Scripts\python.exe collect_real_data.py
+```
 
-Step 3 — Start Mosquitto
-Make sure the Mosquitto broker is running and listening on:
+The collector subscribes to `flood/zone1/sensors` and records real observations with the following fields:
 
-1883
-Step 4 — Start the AI Backend
-Open PowerShell:
+```text
+ts, level_cm, rate_cm_min, rain_adc, rain_status,
+temp_c, hum, water_adc, sensor_ok, uptime_s
+```
 
-cd "C:\Users\kolac\Documents\PlatformIO\Projects\IoT flood Detection"
+> **Warning:** Back up the existing dataset before replacing it if the trained risk model is still required.
 
-Then:
+## 17. Data Integrity Rules
 
-& "C:\Users\kolac\Downloads\Project OMA Agency\IoT flood Based Detection\.venv\Scripts\python.exe" flood_ai.py serve
-
-Step 5 — Open the Dashboard
-Open:
-
-http://localhost:8000
-Step 6 — Allow Sensor History to Accumulate
-Chronos-2 does not immediately produce a forecast at startup.
-
-The backend waits for sufficient fresh sensor history.
-
-Allow the system to run for several minutes before evaluating the forecast and risk display.
-
-18. Collecting New Real Sensor Data
-The project includes a real-data collector.
-
-Run:
-
-cd "C:\Users\kolac\Documents\PlatformIO\Projects\IoT flood Detection"
-
-Then:
-
-& "C:\Users\kolac\Downloads\Project OMA Agency\IoT flood Based Detection\.venv\Scripts\python.exe" collect_real_data.py
-
-The collector subscribes to:
-
-flood/zone1/sensors
-and records real sensor observations.
-
-The data format includes fields such as:
-
-ts
-level_cm
-rate_cm_min
-rain_adc
-rain_status
-temp_c
-hum
-water_adc
-sensor_ok
-uptime_s
-Do not replace the curated project dataset without making a backup if the existing trained risk model is still required.
-
-19. Important Data Integrity Rules
 This project intentionally avoids synthetic sensor values.
 
-Do not add:
+**Do not** add `fakeSample()` or simulated water-level readings to the production demonstration path.
 
-fakeSample()
-or simulated water-level readings to the production demonstration path.
+**Do not** substitute unavailable AI predictions with:
 
-Do not replace unavailable AI predictions with:
+- straight-line forecasts;
+- manually generated HIGH/CRITICAL labels;
+- rule-based values presented as AI predictions;
+- fabricated sensor readings.
 
-straight-line forecasts;
-manually generated HIGH/CRITICAL labels;
-rule-based values presented as AI predictions;
-fabricated sensor readings.
-When the AI service does not have sufficient history or is unavailable, the correct state is to report that prediction/risk is unavailable or unknown.
+When the AI service lacks sufficient history or is unavailable, the correct behaviour is to report prediction/risk as **unavailable or unknown**.
 
-20. Local Safety Behaviour
-The ESP32 retains local safety logic.
+## 18. Local Safety Behaviour
 
-This is important because the laptop AI service and network connection are not guaranteed to be available at every instant.
+The ESP32 retains local safety logic because the laptop AI service and network connection are not guaranteed to be available at every instant. The embedded system can:
 
-The embedded system can:
+- monitor measured water level;
+- detect local warning/danger conditions;
+- activate the buzzer;
+- control the relay;
+- report actuator state.
 
-monitor measured water level;
-detect local warning/danger conditions;
-activate the buzzer;
-control the relay;
-report actuator state.
 The AI layer provides predictive information but does not replace the basic local safety mechanism.
 
-21. Current Prototype Limitations
-The current system has several important limitations.
+## 19. Limitations
 
-Sensor scale
-The water-level probe covers approximately 0–4 cm. This is suitable for the laboratory demonstration but not for direct deployment in a large reservoir or river.
+| Area | Limitation |
+|---|---|
+| **Sensor scale** | The probe covers ≈ 0–4 cm; suitable for laboratory demonstration, not for reservoirs or rivers. |
+| **Dataset size** | 398 accepted observations is small for broad flood-event modelling. |
+| **Class imbalance** | CRITICAL samples greatly outnumber MODERATE samples, and no LOW samples exist. |
+| **Forecast validation** | Chronos-2 integration is verified, but no statistically meaningful independent forecast-error evaluation has been established. |
+| **Rain measurement** | The rain sensor provides qualitative states only, not calibrated rainfall intensity. |
+| **Network security** | The laboratory MQTT configuration is unsuitable for Internet-facing deployment. |
 
-Dataset size
-The collected dataset contains 398 accepted observations, which is small for broad flood-event modelling.
+## 20. Future Scope
 
-Class imbalance
-The future-risk dataset contains many more CRITICAL examples than MODERATE examples and contains no LOW examples.
+A major future direction is scaling the system to dams, reservoirs, and other large water-storage locations, with two distinct warning paths.
 
-Forecast validation
-Chronos-2 integration has been verified, but a statistically meaningful independent forecast-error evaluation has not yet been established.
+**Path 1 — Official authority event**
 
-Rain measurement
-The rain sensor currently provides qualitative states rather than calibrated rainfall intensity.
+```mermaid
+flowchart LR
+    A[Official Authority Event] --> B[Authorized Release Information]
+    B --> C[Downstream Community Alert]
+    C --> D[SMS / Communication]
+    D --> E[Preparedness / Shelter Guidance]
+```
 
-Network security
-The laboratory MQTT configuration is not suitable for an Internet-facing production deployment.
+When authorities formally declare a gate-opening or water-release event, the system could distribute warnings to registered downstream communities via SMS and other channels.
 
-22. Future Scope
-A major future direction is scaling the system to dams, reservoirs, and other large water-storage locations.
+**Path 2 — Measured rapid rise**
 
-A future deployment could connect the monitoring platform with an authorized dam/reservoir release-status system.
+```mermaid
+flowchart LR
+    A[Rapid Measured Water-Level Rise] --> B[Automated Risk Assessment]
+    B --> C[Precautionary Warning]
+    C --> D[Community Preparedness]
+```
 
-When authorities formally declare a gate-opening or water-release event, the system could distribute warnings to registered downstream communities through SMS and other communication channels.
+This path operates when an official decision is delayed but the monitoring network detects a rapid and sustained rise. It should be treated as a **precautionary warning** unless the responsible authority has formally authorized it as an evacuation mechanism.
 
-A second warning path would operate when an official decision is delayed but the monitoring network detects a rapid and sustained increase in water level.
+**Planned work**
 
-The two situations should remain distinct:
+- Field-grade water-level sensors and redundant sensing
+- Longer data collection and multiple monitoring stations
+- Improved rainfall measurement
+- Independent forecast evaluation
+- Secure MQTT and authenticated authority messages
+- SMS delivery tracking and alert acknowledgement
+- Location-specific safe-zone information
+- Event logging and audit trails
 
-Official Authority Event
-        │
-        ▼
-Authorized Release Information
-        │
-        ▼
-Downstream Community Alert
-        │
-        ▼
-SMS / Communication
-        │
-        ▼
-Preparedness / Shelter Guidance
-and:
+## 21. Reproducibility
 
-Rapid Measured Water-Level Rise
-        │
-        ▼
-Automated Risk Assessment
-        │
-        ▼
-Precautionary Warning
-        │
-        ▼
-Community Preparedness
-The automated path should be treated as a precautionary warning unless the responsible authority has formally authorized it as an evacuation mechanism.
+1. Use the documented hardware configuration.
+2. Use the final ESP32 firmware.
+3. Start Mosquitto before starting the AI service.
+4. Confirm that the ESP32 is publishing real sensor messages.
+5. Start the Python backend.
+6. Allow fresh sensor history to accumulate.
+7. Open the dashboard.
+8. Record the experiment session and timestamps.
+9. Preserve the original CSV data.
+10. Record any firmware, calibration, or model changes.
 
-Future work should also include:
-
-field-grade water-level sensors;
-redundant sensing;
-longer data collection;
-multiple monitoring stations;
-improved rainfall measurement;
-independent forecast evaluation;
-secure MQTT;
-authenticated authority messages;
-SMS delivery tracking;
-alert acknowledgement;
-location-specific safe-zone information;
-event logging and audit trails.
-23. Reproducibility
-For reproducible testing:
-
-Use the documented hardware configuration.
-Use the final ESP32 firmware.
-Start Mosquitto before starting the AI service.
-Confirm that the ESP32 is publishing real sensor messages.
-Start the Python backend.
-Allow fresh sensor history to accumulate.
-Open the dashboard.
-Record the experiment session and timestamps.
-Preserve the original CSV data.
-Record any firmware, calibration, or model changes.
 For meaningful AI evaluation, use separate collection sessions or events for evaluation rather than randomly mixing overlapping time windows.
 
-24. Academic and Experimental Scope
-This repository represents an academic prototype.
+## 22. Academic and Experimental Scope
 
-The reported results demonstrate:
+**The reported results demonstrate:**
 
-real sensor acquisition;
-empirical calibration;
-embedded filtering;
-robust rate estimation;
-MQTT telemetry;
-live dashboard integration;
-Chronos-2 loading and live integration;
-Random Forest future-risk classification;
-local actuator response.
-The results do not establish:
+- real sensor acquisition;
+- empirical calibration;
+- embedded filtering;
+- robust rate estimation;
+- MQTT telemetry;
+- live dashboard integration;
+- Chronos-2 loading and live integration;
+- Random Forest future-risk classification;
+- local actuator response.
 
-field-scale flood prediction accuracy;
-reservoir-scale water forecasting;
-certified evacuation capability;
-official emergency-warning authority;
-guaranteed SMS delivery;
-production-grade cybersecurity;
-universal flood-risk thresholds.
-25. Safety Notice
-The prototype should not be used as the sole basis for real-world evacuation decisions.
+**The results do not establish:**
+
+- field-scale flood prediction accuracy;
+- reservoir-scale water forecasting;
+- certified evacuation capability;
+- official emergency-warning authority;
+- guaranteed SMS delivery;
+- production-grade cybersecurity;
+- universal flood-risk thresholds.
+
+## 23. Safety Notice
+
+> **This prototype must not be used as the sole basis for real-world evacuation decisions.**
 
 A production deployment around dams, reservoirs, rivers, or populated downstream areas would require:
 
-validated field sensors;
-redundant communication;
-robust power systems;
-authenticated authority integration;
-independent emergency procedures;
-validated warning thresholds;
-extensive field testing;
-regulatory and institutional approval.
-The current project is intended for academic demonstration, experimentation, and further development.
+- validated field sensors;
+- redundant communication;
+- robust power systems;
+- authenticated authority integration;
+- independent emergency procedures;
+- validated warning thresholds;
+- extensive field testing;
+- regulatory and institutional approval.
 
-26. Authors
-Charan Tharak Varma
-Registration No.: RA2411047020014
+## 24. Authors
 
-27. Project Status
-Current status: Laboratory-scale integrated prototype
+**Charan Tharak Varma** — Registration No.: RA2411047020014
 
-Core pipeline:
+## 25. Project Status
 
-ESP32
-  ↓
-Real Sensor Measurements
-  ↓
-MQTT / Mosquitto
-  ↓
-Python Backend
-  ↓
-Chronos-2 Forecast
-  +
-Random Forest Risk Classification
-  ↓
-Dashboard + MQTT Prediction
-  ↓
-ESP32 Local Response
-The project is ready for continued experimentation, larger real-data collection, independent model evaluation, and future field-scale system design.
+**Current status:** Laboratory-scale integrated prototype.
+
+```text
+ESP32 → Real Sensor Measurements → MQTT / Mosquitto → Python Backend
+      → Chronos-2 Forecast + Random Forest Risk Classification
+      → Dashboard + MQTT Prediction → ESP32 Local Response
 ```
+
+The project is ready for continued experimentation, larger real-data collection, independent model evaluation, and future field-scale system design.
