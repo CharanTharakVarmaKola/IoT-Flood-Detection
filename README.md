@@ -303,9 +303,19 @@ The exact contents may change during development.
 
 ### 14.1 Python Environment
 
+The AI and data-processing components were executed using a dedicated Python virtual environment. The environment contains the libraries required for MQTT communications, numerical processing, data handling, machine-learning classification, model persistence, and Chronos-2 forecating.
+
+The principal packages used by the finalized software environment are:
+paho-mqtt
+numpy
+pandas
+scikit-learn
+joblib
+chronos-forecasting
+
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+.\.venv
 pip install paho-mqtt numpy pandas scikit-learn joblib chronos-forecasting
 ```
 
