@@ -1,0 +1,56 @@
+{
+  "features": [
+    "level_cm",
+    "rate_cm_min",
+    "rain_adc",
+    "temp_c",
+    "hum"
+  ],
+  "classes": [
+    "CRITICAL",
+    "HIGH",
+    "MODERATE"
+  ],
+  "label_definition": {
+    "LOW": "future max level < 2.0 cm within 5 min",
+    "MODERATE": "future max level >= 2.0 and < 3.0 cm within 5 min",
+    "HIGH": "future max level >= 3.0 and < 3.5 cm within 5 min",
+    "CRITICAL": "future max level >= 3.5 cm within 5 min"
+  },
+  "training_rows": 293,
+  "sessions": [
+    0,
+    2
+  ],
+  "metrics": {
+    "balanced_accuracy": 0.9171974522292994,
+    "classification_report": {
+      "CRITICAL": {
+        "precision": 1.0,
+        "recall": 0.9171974522292994,
+        "f1-score": 0.9568106312292359,
+        "support": 157.0
+      },
+      "HIGH": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 0.0
+      },
+      "accuracy": 0.9171974522292994,
+      "macro avg": {
+        "precision": 0.5,
+        "recall": 0.4585987261146497,
+        "f1-score": 0.47840531561461797,
+        "support": 157.0
+      },
+      "weighted avg": {
+        "precision": 1.0,
+        "recall": 0.9171974522292994,
+        "f1-score": 0.9568106312292359,
+        "support": 157.0
+      }
+    },
+    "test_rows": 157
+  }
+}

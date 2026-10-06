@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flood Station — Zone 1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#e9edee; --panel:#ffffff; --ink:#16202b; --muted:#5d6b78;
+  --rule:#c9d2d6; --water:#1266a8; --water-soft:#8fc2e2;
+  --low:#2f7d5c; --mod:#c07a14; --high:#d2571f; --crit:#b3202e;
+  --risk:var(--low);
+  --sans:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --cond:"Barlow Condensed","Barlow",system-ui,sans-serif;
+}
+:root:not([data-theme="light"]){}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111a21; --panel:#18232c; --ink:#e7eef2; --muted:#93a4b0;
+    --rule:#2b3a45; --water:#3d9ad6; --water-soft:#1d4d6b;
+    --low:#4fb083; --mod:#dda43c; --high:#ef7d43; --crit:#ef5568;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111a21; --panel:#18232c; --ink:#e7eef2; --muted:#93a4b0;
+  --rule:#2b3a45; --water:#3d9ad6; --water-soft:#1d4d6b;
+  --low:#4fb083; --mod:#dda43c; --high:#ef7d43; --crit:#ef5568;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--paper); color:var(--ink); font-family:var(--sans);
+  font-size:16px; line-height:1.5; padding:18px;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px;margin:0 auto}
+
+/* ---- masthead ---- */
+.masthead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.masthead h1{
+  font-family:var(--cond); font-weight:600; font-size:30px; letter-spacing:.01em;
+  margin:0; line-height:1;
+}
+.masthead .zone{font-family:var(--cond);font-size:30px;color:var(--muted);line-height:1;font-weight:400}
+.link{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--muted);font-size:14px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--low);flex:none}
+.dot.stale{background:var(--crit)}
+
+/* ---- main panel ---- */
+.panel{
+  background:var(--panel); border:1px solid var(--rule); border-radius:4px;
+  display:grid; grid-template-columns:238px 1fr; overflow:hidden;
+}
+.gauge{padding:22px 18px;border-right:1px solid var(--rule);display:flex;flex-direction:column;gap:12px}
+.gauge svg{display:block;width:100%;height:auto;max-height:330px}
+.levelread{display:flex;align-items:baseline;gap:6px}
+.levelread .n{font-family:var(--cond);font-weight:600;font-size:52px;line-height:.9;letter-spacing:-.01em}
+.levelread .u{font-family:var(--cond);font-size:20px;color:var(--muted)}
+.subread{font-size:14px;color:var(--muted)}
+.subread b{color:var(--ink);font-weight:600}
+
+/* ---- readouts ---- */
+.stack{display:flex;flex-direction:column}
+.verdict{padding:22px 24px 18px;border-bottom:1px solid var(--rule)}
+.verdict .risk{
+  font-family:var(--cond);font-weight:600;font-size:46px;line-height:1;
+  color:var(--risk);display:flex;align-items:center;gap:12px;
+}
+.bars{display:flex;gap:3px;align-items:flex-end;height:30px}
+.bars i{width:7px;background:var(--rule);border-radius:1px;display:block}
+.bars i.on{background:var(--risk)}
+.bars i:nth-child(1){height:30%}.bars i:nth-child(2){height:53%}
+.bars i:nth-child(3){height:76%}.bars i:nth-child(4){height:100%}
+.verdict p{margin:8px 0 0;color:var(--muted);font-size:15px;max-width:52ch}
+
+.rows{display:grid;grid-template-columns:1fr 1fr}
+.row{padding:15px 24px;border-bottom:1px solid var(--rule)}
+.row:nth-child(odd){border-right:1px solid var(--rule)}
+.row .k{font-size:13px;color:var(--muted)}
+.row .v{font-family:var(--cond);font-size:27px;font-weight:500;line-height:1.15;display:flex;align-items:baseline;gap:5px}
+.row .v small{font-family:var(--sans);font-size:13px;font-weight:400;color:var(--muted)}
+.tag{
+  display:inline-block;font-family:var(--sans);font-size:13px;font-weight:600;
+  padding:2px 9px;border-radius:999px;border:1px solid currentColor;line-height:1.5;
+}
+.t-ok{color:var(--low)} .t-warn{color:var(--mod)} .t-dgr{color:var(--crit)} .t-idle{color:var(--muted)}
+
+/* ---- pump ---- */
+.pump{padding:15px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.pump .state{font-family:var(--cond);font-size:27px;font-weight:500}
+.seg{display:flex;border:1px solid var(--rule);border-radius:3px;overflow:hidden;margin-left:auto}
+.seg button{
+  font:inherit;font-size:14px;background:transparent;color:var(--muted);
+  border:0;padding:6px 14px;cursor:pointer;
+}
+.seg button+button{border-left:1px solid var(--rule)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+.seg button:focus-visible{outline:2px solid var(--water);outline-offset:-2px}
+
+/* ---- trend ---- */
+.trend{margin-top:14px;background:var(--panel);border:1px solid var(--rule);border-radius:4px;padding:16px 18px}
+.trend header{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+.trend h2{font-family:var(--cond);font-weight:600;font-size:19px;margin:0}
+.trend .note{font-size:13px;color:var(--muted);margin-left:auto}
+.trend svg{display:block;width:100%;height:120px}
+.env{margin-top:10px;font-size:14px;color:var(--muted)}
+.banner{
+  margin-bottom:12px;padding:10px 14px;border-radius:3px;font-size:14px;
+  border:1px solid var(--mod);color:var(--mod);background:transparent;
+}
+.banner[hidden]{display:none}
+@media (max-width:760px){
+  body{padding:12px}
+  .panel{grid-template-columns:1fr}
+  .gauge{border-right:0;border-bottom:1px solid var(--rule);flex-direction:row;align-items:center}
+  .gauge svg{max-height:200px;width:110px}
+  .rows{grid-template-columns:1fr}
+  .row:nth-child(odd){border-right:0}
+  .seg{margin-left:0;width:100%}
+  .seg button{flex:1}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <h1>Flood Station</h1>
+    <span class="zone">Zone 1</span>
+    <span class="link"><span class="dot" id="dot"></span><span id="linktext">connecting…</span></span>
+  </div>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <div class="panel">
+    <!-- hero: the water column -->
+    <div class="gauge">
+      <svg viewBox="0 0 120 300" aria-label="Water column">
+        <defs>
+          <clipPath id="tube"><rect x="34" y="14" width="52" height="272" rx="5"/></clipPath>
+        </defs>
+        <rect x="34" y="14" width="52" height="272" rx="5" fill="var(--paper)" stroke="var(--rule)"/>
+        <g clip-path="url(#tube)">
+          <rect id="dangerBand" x="34" y="14" width="52" height="0" fill="var(--crit)" opacity=".10"/>
+          <rect id="warnBand"   x="34" y="14" width="52" height="0" fill="var(--mod)"  opacity=".10"/>
+          <rect id="fill" x="34" y="286" width="52" height="0" fill="var(--water)" opacity=".85"/>
+          <line id="predLine" x1="30" y1="286" x2="90" y2="286"
+                stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="5 4"/>
+        </g>
+        <g id="ticks" fill="var(--muted)" font-size="9" font-family="Barlow Condensed, sans-serif"></g>
+        <text id="predTag" x="92" y="286" font-size="9.5" fill="var(--muted)"
+              font-family="Barlow Condensed, sans-serif">forecast</text>
+      </svg>
+      <div>
+        <div class="levelread"><span class="n" id="level">—</span><span class="u">cm</span></div>
+        <div class="subread">of <b id="tank">—</b> cm column</div>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div class="verdict">
+        <div class="risk">
+          <span class="bars" id="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          <span id="riskText">—</span>
+        </div>
+        <p id="riskWhy">Waiting for the first reading from the station.</p>
+      </div>
+
+      <div class="rows">
+        <div class="row">
+          <div class="k">Rate of rise</div>
+          <div class="v"><span id="rate">—</span><small>cm/min</small></div>
+        </div>
+        <div class="row">
+          <div class="k">Rain</div>
+          <div class="v"><span id="rain">—</span><small id="rainRaw"></small></div>
+        </div>
+        <div class="row">
+          <div class="k">Forecast level <span id="horiz"></span></div>
+          <div class="v"><span id="pred">—</span><small id="predSrc">cm</small></div>
+        </div>
+        <div class="row">
+          <div class="k">Alert</div>
+          <div class="v"><span class="tag t-idle" id="alert">—</span></div>
+        </div>
+      </div>
+
+      <div class="pump">
+        <div>
+          <div class="k" style="font-size:13px;color:var(--muted)">Pump</div>
+          <div class="state" id="pump">—</div>
+        </div>
+        <div class="seg" role="group" aria-label="Pump control">
+          <button data-mode="auto" aria-pressed="false">Auto</button>
+          <button data-mode="on"   aria-pressed="false">Run now</button>
+          <button data-mode="off"  aria-pressed="false">Hold off</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="trend">
+    <header>
+      <h2>Last 10 minutes</h2>
+      <span class="note" id="trendNote">measured level, with forecast ahead of now</span>
+    </header>
+    <svg viewBox="0 0 600 120" preserveAspectRatio="none" aria-label="Water level trend">
+      <line x1="0" y1="119" x2="600" y2="119" stroke="var(--rule)"/>
+      <path id="area" fill="var(--water)" opacity=".14"/>
+      <path id="line" fill="none" stroke="var(--water)" stroke-width="2"
+            stroke-linejoin="round" stroke-linecap="round"/>
+      <path id="fore" fill="none" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="5 4" opacity=".6"/>
+    </svg>
+    <div class="env" id="env"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id)};
+  var hist=[], MAXPTS=120;
+
+  /* ---------- fetch ----------
+     Real data only. On a failed fetch we mark the link stale and leave
+     the last real reading on screen — we never invent a replacement
+     sample, per the "no synthetic sensor data" requirement. */
+  function poll(){
+    fetch('/api/data',{cache:'no-store'})
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(render)
+      .catch(function(){
+        $('dot').className='dot stale';
+        $('linktext').textContent='laptop service not responding';
+      });
+  }
+
+  function setPump(mode){
+    fetch('/api/pump?mode='+mode,{method:'POST'}).then(poll).catch(function(){});
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.seg button'),function(b){
+    b.addEventListener('click',function(){ setPump(b.dataset.mode); });
+  });
+
+  /* ---------- render ---------- */
+  var RISKVAR={LOW:'--low',MODERATE:'--mod',HIGH:'--high',CRITICAL:'--crit',UNKNOWN:'--muted'};
+  function render(d){
+    document.documentElement.style.setProperty('--risk','var('+(RISKVAR[d.risk]||'--muted')+')');
+
+    var online = (d.station_online!==false) && d.sensor_ok;
+    $('dot').className='dot'+(online?'':' stale');
+    $('linktext').textContent = (d.station_online===false) ? 'ESP32 not reporting' : 'live · ESP32 connected';
+
+    $('level').textContent = d.level_cm.toFixed(1);
+    $('tank').textContent  = d.tank_cm.toFixed(0);
+    $('rate').textContent  = (d.rate_cm_min>=0?'+':'') + d.rate_cm_min.toFixed(2);
+    $('rain').textContent  = d.rain_status;
+    $('rainRaw').textContent = 'raw ' + d.rain_adc;
+    var predReady = (d.predict_src==='chronos2');
+    $('pred').textContent  = predReady ? d.predicted_cm.toFixed(1) : '—';
+    $('horiz').textContent = '(+' + d.horizon_min + ' min)';
+    $('predSrc').textContent = predReady ? 'cm · Chronos-2' : 'warming AI';
+    $('riskText').textContent = d.risk;
+
+    var order={LOW:1,MODERATE:2,HIGH:3,CRITICAL:4}, n=order[d.risk]||0;
+    Array.prototype.forEach.call($('bars').children,function(el,i){
+      el.className = i<n ? 'on' : '';
+    });
+    $('riskWhy').textContent = explain(d);
+
+    var cls={Normal:'t-ok',Warning:'t-warn',Danger:'t-dgr',Unknown:'t-idle'}[d.alert]||'t-idle';
+    $('alert').className='tag '+cls; $('alert').textContent=d.alert;
+
+    $('pump').textContent = d.pump + (d.pump_mode!=='auto' ? ' · manual' : '');
+    Array.prototype.forEach.call(document.querySelectorAll('.seg button'),function(b){
+      b.setAttribute('aria-pressed', String(b.dataset.mode===d.pump_mode));
+    });
+
+    var b=$('banner');
+    if(d.station_online===false){ b.hidden=false; b.textContent='No data from the ESP32 for over 20 seconds. Check that it is powered, on the same Wi-Fi, and connected to the broker.'; }
+    else if(!d.sensor_ok){ b.hidden=false; b.textContent='Water-level probe reading looks invalid (out of the calibrated range, or too noisy between samples). Level shown is the last valid reading, not a confirmed dry (0 cm) reading.'; }
+    else if(d.risk==='UNKNOWN'){ b.hidden=false; b.textContent = d.predict_src==='chronos2' ? 'Chronos-2 forecast is live from the laptop. Risk remains UNKNOWN because a trained risk classifier has not yet been deployed.' : 'Chronos-2 is warming up — measured readings are live and the first forecast will appear after about 60 seconds of real history.'; }
+    else b.hidden=true;
+
+    $('env').textContent = 'Air ' + d.temp_c.toFixed(1) + ' °C · humidity ' + d.hum.toFixed(0) + '% · station up ' + fmtUp(d.uptime_s);
+
+    drawGauge(d); pushHist(d); drawTrend(d);
+  }
+
+  function explain(d){
+    var p=[];
+    if(d.rate_cm_min>0.05) p.push('rising ' + d.rate_cm_min.toFixed(2) + ' cm/min');
+    else if(d.rate_cm_min<-0.05) p.push('falling ' + Math.abs(d.rate_cm_min).toFixed(2) + ' cm/min');
+    else p.push('level is steady');
+    if(d.rain_status!=='Dry') p.push(d.rain_status.toLowerCase() + ' rain on the sensor');
+    if(d.predict_src==='chronos2'){
+      p.push('Chronos-2 forecasts ' + d.predicted_cm.toFixed(1) + ' cm in ' + d.horizon_min + ' min against a ' + d.danger_cm.toFixed(1) + ' cm demonstration danger mark');
+    } else {
+      p.push('Chronos-2 forecast is still warming up');
+    }
+    if(d.risk==='UNKNOWN'){
+      return 'Measured readings only \u2014 ' + p.join(', ') + '. No AI risk classification yet.';
+    }
+    return p.join(', ') + '.';
+  }
+  function fmtUp(s){
+    var h=Math.floor(s/3600), m=Math.floor(s%3600/60);
+    return h ? h+'h '+m+'m' : m+'m';
+  }
+
+  /* ---------- gauge ---------- */
+  var TOP=14, BOT=286, H=BOT-TOP, ticksDone=false;
+  function y(v,tank){ return BOT - Math.max(0,Math.min(1,v/tank))*H; }
+  function drawGauge(d){
+    var f=$('fill'), yy=y(d.level_cm,d.tank_cm);
+    f.setAttribute('y',yy); f.setAttribute('height',BOT-yy);
+    var wy=y(d.warn_cm,d.tank_cm), dy=y(d.danger_cm,d.tank_cm);
+    $('warnBand').setAttribute('y',wy);   $('warnBand').setAttribute('height',BOT-wy);
+    $('dangerBand').setAttribute('y',dy); $('dangerBand').setAttribute('height',BOT-dy);
+    var predReady=(d.predict_src==='chronos2');
+    $('predLine').style.opacity = predReady ? '1' : '0';
+    $('predTag').style.opacity  = predReady ? '1' : '0';
+    if(predReady){
+      var py=y(d.predicted_cm,d.tank_cm);
+      $('predLine').setAttribute('y1',py); $('predLine').setAttribute('y2',py);
+      $('predTag').setAttribute('y',py-3);
+    }
+    if(!ticksDone){
+      // One tick per whole cm on a small-scale probe (<=5 cm tank) reads
+      // far better than dividing the range into five arbitrary steps.
+      var g=$('ticks'), step=(d.tank_cm<=5)?1:(d.tank_cm/5), out='', n=Math.round(d.tank_cm/step);
+      for(var i=0;i<=n;i++){
+        var v=step*i, ty=y(v,d.tank_cm);
+        out+='<line x1="28" y1="'+ty+'" x2="34" y2="'+ty+'" stroke="var(--rule)"/>'+
+             '<text x="25" y="'+(ty+3)+'" text-anchor="end">'+(v%1===0?v.toFixed(0):v.toFixed(1))+'</text>';
+      }
+      g.innerHTML=out; ticksDone=true;
+    }
+  }
+
+  /* ---------- trend ---------- */
+  function pushHist(d){
+    hist.push(d.level_cm);
+    if(hist.length>MAXPTS) hist.shift();
+  }
+  function drawTrend(d){
+    if(hist.length<2){ return; }
+    var lo=Math.min.apply(null,hist.concat([d.predicted_cm])),
+        hi=Math.max.apply(null,hist.concat([d.predicted_cm]));
+    if(hi-lo<1){ hi=lo+1; }
+    var pad=(hi-lo)*0.15; lo-=pad; hi+=pad;
+    var W=460, sx=function(i){ return i/(MAXPTS-1)*W; },
+        sy=function(v){ return 112 - (v-lo)/(hi-lo)*100; };
+    var pts=hist.map(function(v,i){ return sx(i+(MAXPTS-hist.length))+','+sy(v); });
+    $('line').setAttribute('d','M'+pts.join('L'));
+    $('area').setAttribute('d','M'+pts.join('L')+'L'+sx(MAXPTS-1)+',119L'+sx(MAXPTS-hist.length)+',119Z');
+    if(d.predict_src==='chronos2'){
+      var lastX=sx(MAXPTS-1), lastY=sy(hist[hist.length-1]);
+      $('fore').setAttribute('d','M'+lastX+','+lastY+'L600,'+sy(d.predicted_cm));
+      $('trendNote').textContent='measured level, with forecast ahead of now';
+    } else {
+      $('fore').setAttribute('d','');       // nothing real to draw yet
+      $('trendNote').textContent='measured level (forecast awaiting AI)';
+    }
+  }
+
+  poll();
+  setInterval(poll,2000);
+})();
+</script>
+</body>
+</html>
